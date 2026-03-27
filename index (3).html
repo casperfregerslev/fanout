@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Fan-Out — iProspect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --carbon:     #212322;
+  --white:      #ffffff;
+  --green:      #3ec780;
+  --green-dark: #27a063;
+  --green-dim:  rgba(62,199,128,0.09);
+  --slate:      #91aca2;
+  --sand:       #f4e9db;
+  --sand2:      #ede1d0;
+  --powder:     #9bb7d4;
+  --teal:       #007298;
+  --surface:    #faf9f7;
+  --border:     #e8e2d8;
+  --border2:    #d8d0c4;
+  --text:       #212322;
+  --text2:      #585a59;
+  --text3:      #9a9c9b;
+  --danger:     #c84030;
+  --warning:    #b07820;
+  --mono:       'DM Mono', monospace;
+  --sans:       'Plus Jakarta Sans', sans-serif;
+  --r:          5px;
+  --r2:         10px;
+}
+html, body, #root { height: 100%; }
+body { background: var(--white); color: var(--text); font-family: var(--sans); font-size: 14px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* Sidebar */
+.sidebar { width: 224px; min-width: 224px; background: var(--carbon); display: flex; flex-direction: column; overflow: hidden; }
+.s-logo { padding: 22px 18px 18px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+.s-brand { font-size: 12px; font-weight: 700; color: var(--white); text-transform: uppercase; letter-spacing: 1.5px; }
+.s-product { font-family: var(--mono); font-size: 10px; color: var(--green); margin-top: 3px; }
+.s-sec { padding: 16px 18px 5px; font-family: var(--mono); font-size: 9px; color: rgba(255,255,255,0.25); text-transform: uppercase; letter-spacing: 2px; }
+.s-nav { flex: 1; overflow-y: auto; padding: 4px 8px; }
+.s-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r); cursor: pointer; transition: background 0.12s; margin-bottom: 1px; }
+.s-item:hover { background: rgba(255,255,255,0.05); }
+.s-item.on { background: rgba(62,199,128,0.11); }
+.s-pip { width: 5px; height: 5px; border-radius: 50%; background: rgba(255,255,255,0.15); flex-shrink: 0; }
+.s-item.on .s-pip { background: var(--green); }
+.s-name { font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.45); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-item.on .s-name { color: rgba(255,255,255,0.90); }
+.s-count { font-family: var(--mono); font-size: 10px; color: rgba(255,255,255,0.18); }
+.s-item.on .s-count { color: rgba(62,199,128,0.6); }
+.s-empty { padding: 10px 10px; font-size: 12px; color: rgba(255,255,255,0.22); line-height: 1.8; font-weight: 300; }
+.s-foot { padding: 12px 8px; border-top: 1px solid rgba(255,255,255,0.07); }
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--r); font-family: var(--sans); font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: all 0.12s; white-space: nowrap; }
+.btn-primary { background: var(--carbon); color: var(--white); }
+.btn-primary:hover { background: #363a38; }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-green { background: var(--green); color: var(--carbon); }
+.btn-green:hover { background: var(--green-dark); color: var(--white); }
+.btn-green:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border2); }
+.btn-ghost:hover { background: var(--surface); color: var(--text); }
+.btn-dark { background: transparent; color: rgba(255,255,255,0.45); border: 1px solid rgba(255,255,255,0.12); }
+.btn-dark:hover { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.75); }
+.btn-sm { padding: 5px 11px; font-size: 11px; }
+.btn-full { width: 100%; justify-content: center; }
+.btn-text { background: none; border: none; color: var(--text3); font-family: var(--sans); font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.btn-text:hover { color: var(--text2); }
+
+/* Main */
+.main { flex: 1; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+
+/* Topbar */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 0 28px; height: 54px; border-bottom: 1px solid var(--border); background: var(--white); gap: 16px; flex-shrink: 0; }
+.tb-title { font-size: 14px; font-weight: 700; letter-spacing: -0.2px; }
+.tb-sub { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 1px; }
+.tb-right { display: flex; gap: 8px; align-items: center; }
+
+/* API field */
+.api-field { display: flex; align-items: center; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; height: 32px; background: var(--surface); }
+.api-lbl { font-family: var(--mono); font-size: 9px; color: var(--text3); padding: 0 9px; text-transform: uppercase; letter-spacing: 1px; border-right: 1px solid var(--border); height: 100%; display: flex; align-items: center; white-space: nowrap; background: var(--sand); }
+.api-inp { background: transparent; border: none; color: var(--text2); font-family: var(--mono); font-size: 11px; padding: 0 9px; width: 188px; outline: none; height: 100%; }
+.api-inp::placeholder { color: var(--text3); }
+.api-dot { width: 5px; height: 5px; border-radius: 50%; margin-right: 9px; flex-shrink: 0; transition: background 0.2s; }
+.api-dot.on { background: var(--green); }
+.api-dot.off { background: var(--border2); }
+
+/* Content */
+.content { flex: 1; overflow-y: auto; padding: 28px; }
+
+/* ── README LANDING ── */
+.readme { max-width: 660px; margin: 0 auto; padding: 12px 0 48px; }
+.readme-eyebrow { font-family: var(--mono); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px; }
+.readme-hero { font-size: 28px; font-weight: 700; letter-spacing: -0.6px; line-height: 1.2; color: var(--text); margin-bottom: 10px; }
+.readme-hero span { color: var(--green-dark); }
+.readme-lead { font-size: 15px; font-weight: 300; color: var(--text2); line-height: 1.75; margin-bottom: 32px; max-width: 540px; }
+.readme-divider { height: 1px; background: var(--border); margin: 28px 0; }
+.readme-section-title { font-size: 12px; font-weight: 700; letter-spacing: 0.3px; color: var(--text); text-transform: uppercase; margin-bottom: 12px; font-family: var(--mono); }
+.readme-body { font-size: 13px; font-weight: 300; color: var(--text2); line-height: 1.8; margin-bottom: 14px; }
+.readme-steps { display: flex; flex-direction: column; gap: 0; }
+.readme-step { display: flex; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.readme-step:last-child { border-bottom: none; }
+.step-num { font-family: var(--mono); font-size: 11px; color: var(--green-dark); flex-shrink: 0; padding-top: 2px; font-weight: 500; min-width: 22px; }
+.step-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.step-body { font-size: 13px; font-weight: 300; color: var(--text2); line-height: 1.7; }
+.readme-concept { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); padding: 18px 20px; margin-bottom: 10px; }
+.readme-concept-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.readme-concept-body { font-size: 13px; font-weight: 300; color: var(--text2); line-height: 1.7; }
+.readme-cta { margin-top: 32px; display: flex; gap: 10px; align-items: center; }
+.readme-cta-note { font-size: 12px; color: var(--text3); font-weight: 300; }
+
+/* Stats */
+.stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 22px; }
+.stat { border: 1px solid var(--border); border-radius: var(--r2); padding: 15px 17px; background: var(--white); }
+.stat-lbl { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px; }
+.stat-n { font-size: 26px; font-weight: 700; letter-spacing: -0.8px; color: var(--text); line-height: 1; }
+.stat-n.g { color: var(--green-dark); }
+.stat-n.a { color: var(--warning); }
+.stat-n.r { color: var(--danger); }
+
+/* Section head */
+.sec-h { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 2px; margin: 20px 0 10px; padding-bottom: 7px; border-bottom: 1px solid var(--border); }
+.sec-h:first-child { margin-top: 0; }
+
+/* Upload */
+.upload-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+.uzone { border: 1.5px dashed var(--border2); border-radius: var(--r2); padding: 24px 18px; text-align: center; cursor: pointer; transition: all 0.15s; background: var(--white); }
+.uzone:hover, .uzone.drag { border-color: var(--green); background: var(--green-dim); }
+.uzone.done { border-color: var(--green); border-style: solid; background: var(--green-dim); }
+.u-icon { width: 32px; height: 32px; background: var(--sand); border: 1px solid var(--border); border-radius: var(--r); display: flex; align-items: center; justify-content: center; margin: 0 auto 10px; font-size: 13px; color: var(--text3); }
+.uzone.done .u-icon { background: var(--green-dim); border-color: var(--green); color: var(--green-dark); }
+.u-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.u-hint  { font-size: 11px; color: var(--text3); font-weight: 300; }
+.uzone.done .u-hint { color: var(--green-dark); }
+
+/* Table */
+.tbl-shell { border: 1px solid var(--border); border-radius: var(--r2); overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: var(--surface); border-bottom: 1px solid var(--border); }
+th { padding: 9px 15px; text-align: left; font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 400; }
+td { padding: 10px 15px; font-size: 12px; color: var(--text2); border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--surface); }
+.td-url { font-family: var(--mono); font-size: 11px; color: var(--text); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Badge */
+.badge { display: inline-flex; align-items: center; padding: 2px 7px; border-radius: 3px; font-family: var(--mono); font-size: 9px; font-weight: 500; letter-spacing: 0.3px; text-transform: uppercase; }
+.b-g  { background: rgba(62,199,128,0.10);  color: var(--green-dark); }
+.b-a  { background: rgba(176,120,32,0.08);  color: var(--warning); }
+.b-r  { background: rgba(200,64,48,0.08);   color: var(--danger); }
+.b-t  { background: rgba(0,114,152,0.08);   color: var(--teal); }
+.b-p  { background: rgba(155,183,212,0.14); color: #3a5878; }
+.b-s  { background: rgba(145,172,162,0.12); color: #4a6a62; }
+.b-x  { background: var(--surface); color: var(--text3); border: 1px solid var(--border); }
+
+/* Score */
+.score { display: flex; align-items: center; gap: 8px; }
+.s-track { flex: 1; height: 3px; background: var(--sand); border-radius: 2px; overflow: hidden; }
+.s-fill  { height: 100%; border-radius: 2px; transition: width 0.35s; }
+.s-lbl   { font-family: var(--mono); font-size: 10px; color: var(--text2); min-width: 24px; text-align: right; }
+
+/* Tabs */
+.tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab { padding: 8px 14px; font-size: 12px; font-weight: 500; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.12s; margin-bottom: -1px; }
+.tab:hover { color: var(--text2); }
+.tab.on { color: var(--carbon); border-bottom-color: var(--green); }
+
+/* Modal */
+.overlay { position: fixed; inset: 0; background: rgba(33,35,34,0.4); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+.modal { background: var(--white); border: 1px solid var(--border); border-radius: var(--r2); box-shadow: 0 16px 56px rgba(33,35,34,0.16); width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; padding: 28px; }
+.m-step { font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+.m-title { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; margin-bottom: 3px; }
+.m-sub   { font-size: 13px; font-weight: 300; color: var(--text2); margin-bottom: 20px; line-height: 1.65; }
+.m-steps { display: flex; gap: 6px; margin-bottom: 22px; }
+.m-step-dot { flex: 1; height: 3px; border-radius: 2px; background: var(--border2); transition: background 0.2s; }
+.m-step-dot.on { background: var(--green); }
+
+/* Form */
+.fg { margin-bottom: 13px; }
+.fl { display: block; font-family: var(--mono); font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 5px; }
+.fi { width: 100%; background: var(--white); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-family: var(--sans); font-size: 13px; padding: 8px 11px; outline: none; transition: border-color 0.12s; }
+.fi:focus { border-color: var(--carbon); }
+.fi::placeholder { color: var(--text3); }
+textarea.fi { resize: vertical; min-height: 68px; }
+.f-row { display: flex; gap: 8px; justify-content: space-between; align-items: center; margin-top: 20px; }
+.f-row-right { display: flex; gap: 8px; }
+
+/* Panel */
+.panel { position: fixed; top: 0; right: 0; width: 516px; height: 100vh; background: var(--white); border-left: 1px solid var(--border); box-shadow: -6px 0 28px rgba(33,35,34,0.07); overflow-y: auto; z-index: 50; padding: 26px; animation: p-in 0.18s ease; }
+@keyframes p-in { from { transform: translateX(10px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+.p-x { position: absolute; top: 18px; right: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); color: var(--text2); cursor: pointer; padding: 4px 9px; font-size: 11px; font-family: var(--sans); font-weight: 500; }
+.p-x:hover { background: var(--sand); }
+
+/* Sub-query */
+.sq { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); margin-bottom: 6px; }
+.sq-q { font-size: 13px; color: var(--text); flex: 1; line-height: 1.5; }
+.sq-r { font-size: 11px; color: var(--text3); margin-top: 2px; font-weight: 300; }
+
+/* Gap / Rec */
+.gap { padding: 9px 13px; border-left: 2px solid var(--green); background: var(--green-dim); border-radius: 0 var(--r) var(--r) 0; margin-bottom: 6px; font-size: 13px; color: var(--text2); font-weight: 300; line-height: 1.55; }
+.rec { display: flex; gap: 12px; margin-bottom: 9px; }
+.rec-n { font-family: var(--mono); font-size: 10px; color: var(--green-dark); flex-shrink: 0; padding-top: 2px; }
+.rec-t { font-size: 13px; color: var(--text2); line-height: 1.65; font-weight: 300; }
+
+/* Warn */
+.warn { background: #fffbf0; border: 1px solid rgba(176,120,32,0.2); border-radius: var(--r); padding: 9px 12px; font-size: 12px; color: var(--warning); margin-bottom: 14px; }
+
+/* Spinner */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { width: 13px; height: 13px; border: 2px solid var(--border2); border-top-color: var(--green); border-radius: 50%; animation: spin 0.65s linear infinite; flex-shrink: 0; }
+
+/* Toast */
+.toast { position: fixed; bottom: 20px; right: 20px; background: var(--carbon); color: var(--white); border-radius: var(--r); padding: 10px 14px; font-size: 12px; font-weight: 500; z-index: 200; display: flex; align-items: center; gap: 8px; max-width: 270px; animation: t-in 0.16s ease; }
+@keyframes t-in { from { transform: translateY(5px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.t-pip { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+/* Utils */
+.mb-8  { margin-bottom: 8px; }
+.mb-14 { margin-bottom: 14px; }
+.mb-20 { margin-bottom: 20px; }
+.mt-16 { margin-top: 16px; }
+.mono  { font-family: var(--mono); font-size: 10px; }
+.muted { color: var(--text3); }
+.light { font-weight: 300; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const ls = {
+  get:(k,fb=null)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch{return fb;}},
+  set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}}
+};
+
+/* ── CSV parsers ── */
+function parseCustomJs(rows) {
+  const jsKey=Object.keys(rows[0]||{}).find(k=>/custom.?javascript|custom.?js|sf_json/i.test(k));
+  const urlKey=Object.keys(rows[0]||{}).find(k=>/^address$|^url$/i.test(k));
+  return rows.map(row=>{
+    const raw=jsKey?row[jsKey]:null,url=urlKey?row[urlKey]:'';
+    let p=null;
+    if(raw){try{p=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(m)try{p=JSON.parse(m[0]);}catch{}}}
+    return {url:p?.url||url||'',site_lang:p?.site_lang||p?.sf_json?.siteLangCode||'en',page_type:p?.page_type||p?.sf_json?.pageType||'—',existing_text:p?.existing_text||'',sf_json:p?.sf_json||p||null,source:'custom_js'};
+  }).filter(r=>r.url);
+}
+
+function parseInternal(rows) {
+  const col=(row,...ns)=>{for(const n of ns){const k=Object.keys(row).find(k=>k.trim().toLowerCase()===n.toLowerCase());if(k&&row[k])return row[k];}return '';};
+  return rows.map(row=>{
+    const url=col(row,'Address','URL');if(!url)return null;
+    const ct=col(row,'Content Type','content type');if(ct&&!ct.includes('text/html'))return null;
+    return {url,site_lang:'en',page_type:'—',existing_text:col(row,'Title 1','Title')+' '+col(row,'Meta Description 1','Meta Description'),sf_json:{url,titleTag:col(row,'Title 1','Title'),h1:col(row,'H1-1','H1'),metaDescription:col(row,'Meta Description 1','Meta Description'),wordCount:col(row,'Word Count'),inlinks:col(row,'Inlinks')},source:'internal_all'};
+  }).filter(Boolean);
+}
+
+/* ── Gemini ── */
+async function gemini(key,prompt) {
+  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{role:'user',parts:[{text:prompt}]}],generationConfig:{temperature:0.3,maxOutputTokens:4096}})});
+  if(!r.ok)throw new Error(`Gemini ${r.status}`);
+  const d=await r.json();
+  return d?.candidates?.[0]?.content?.parts?.map(p=>p.text).join('')||'';
+}
+
+function fanoutPrompt(u,q) {
+  const s=u.sf_json||{};
+  return `You are an AI search visibility analyst. Simulate how Google AI Overviews or Perplexity decomposes the seed query into sub-queries, then score how well this page covers each one.
+
+SEED QUERY: ${q}
+URL: ${u.url}
+Title: ${s.titleTag||''} | H1: ${s.h1||''} | Type: ${u.page_type||''}
+Meta: ${s.metaDescription||''}
+Intro: ${(u.existing_text||'').slice(0,400)}
+Headings: ${JSON.stringify((s.headings||[]).map(h=>h.heading))}
+Schemas: ${JSON.stringify((s.schemas||[]).map(s=>s.type))}
+
+Return ONLY valid JSON (no markdown, no fences):
+{"sub_queries":[{"query":"","intent":"informational|comparative|transactional|procedural|navigational","coverage":"full|partial|none","coverage_score":0,"reason":""}],"gaps":[],"recommendations":[],"overall_score":0,"summary":""}
+
+Generate 8–12 realistic sub-queries an AI would fan out to.`;
+}
+
+/* ── Toast ── */
+function Toast({msg,type,onDone}) {
+  useEffect(()=>{const t=setTimeout(onDone,3200);return()=>clearTimeout(t);},[]);
+  const c={success:'#3ec780',error:'#c84030',info:'#9bb7d4'};
+  return <div className="toast"><div className="t-pip" style={{background:c[type]||c.info}}/>{msg}</div>;
+}
+
+/* ── Upload zone (standalone) ── */
+function UploadZone({title,hint,onFile,done}) {
+  const [drag,setDrag]=useState(false),ref=useRef();
+  const parse=f=>{if(!f)return;Papa.parse(f,{header:true,skipEmptyLines:true,complete:r=>onFile(r.data,f.name)});};
+  return (
+    <div className={`uzone${drag?' drag':''}${done?' done':''}`} onClick={()=>ref.current.click()}
+      onDragOver={e=>{e.preventDefault();setDrag(true);}} onDragLeave={()=>setDrag(false)}
+      onDrop={e=>{e.preventDefault();setDrag(false);parse(e.dataTransfer.files[0]);}}>
+      <input ref={ref} type="file" accept=".csv" style={{display:'none'}} onChange={e=>parse(e.target.files[0])}/>
+      <div className="u-icon">{done?'✓':'↑'}</div>
+      <div className="u-title">{done?'Uploaded':'  '}{title}</div>
+      <div className="u-hint">{done?'Click to replace':'  '}{!done&&hint}</div>
+    </div>
+  );
+}
+
+/* ── Two-step New Project Modal ── */
+function NewProject({onClose,onSave,notify}) {
+  const [step,setStep]=useState(1);
+  const [form,setForm]=useState({name:'',domain:'',brand:'',tone:''});
+  const [cjsRows,setCjsRows]=useState(null);
+  const [intRows,setIntRows]=useState(null);
+  const [cjsName,setCjsName]=useState('');
+  const [intName,setIntName]=useState('');
+
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  const handleCjs=(rows,name)=>{setCjsRows(rows);setCjsName(name);};
+  const handleInt=(rows,name)=>{setIntRows(rows);setIntName(name);};
+
+  const finish=()=>{
+    let urls=[];
+    if(cjsRows){
+      const p=parseCustomJs(cjsRows);
+      urls=[...urls,...p];
+    }
+    if(intRows){
+      const p=parseInternal(intRows);
+      const byUrl=Object.fromEntries(urls.map(u=>[u.url,u]));
+      for(const x of p){if(byUrl[x.url]){byUrl[x.url]={...byUrl[x.url],sf_json:{...x.sf_json,...byUrl[x.url].sf_json}};}else{byUrl[x.url]=x;}}
+      urls=Object.values(byUrl);
+    }
+    onSave({...form,id:Date.now().toString(),urls,createdAt:new Date().toISOString()});
+    if(urls.length) notify(`Project created with ${urls.length} URLs ready to analyse`,'success');
+    else notify('Project created — add your CSV exports whenever you\'re ready','info');
+    onClose();
+  };
+
+  return (
+    <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        {/* Step indicators */}
+        <div className="m-steps">
+          <div className={`m-step-dot${step>=1?' on':''}`}/>
+          <div className={`m-step-dot${step>=2?' on':''}`}/>
+        </div>
+
+        {step===1&&(
+          <>
+            <div className="m-step">Step 1 of 2</div>
+            <div className="m-title">Set up your project</div>
+            <div className="m-sub">Give this workspace a name and a bit of context. You can always update these later.</div>
+            <div className="fg"><label className="fl">Project name *</label>
+              <input className="fi" placeholder="e.g. Elgiganten — Q3 2026" value={form.name} onChange={e=>set('name',e.target.value)} autoFocus/></div>
+            <div className="fg"><label className="fl">Domain</label>
+              <input className="fi" placeholder="elgiganten.dk" value={form.domain} onChange={e=>set('domain',e.target.value)}/></div>
+            <div className="fg"><label className="fl">Brand name</label>
+              <input className="fi" placeholder="Elgiganten" value={form.brand} onChange={e=>set('brand',e.target.value)}/></div>
+            <div className="fg"><label className="fl">Tone & brand notes</label>
+              <textarea className="fi" placeholder="e.g. Friendly tone, consumer electronics, Danish market. Avoid technical jargon." value={form.tone} onChange={e=>set('tone',e.target.value)}/></div>
+            <div className="f-row">
+              <button className="btn-text" onClick={onClose}>Cancel</button>
+              <div className="f-row-right">
+                <button className="btn btn-primary" disabled={!form.name.trim()} onClick={()=>setStep(2)}>Next — add data</button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {step===2&&(
+          <>
+            <div className="m-step">Step 2 of 2</div>
+            <div className="m-title">Add your Screaming Frog exports</div>
+            <div className="m-sub">
+              Drop in your CSV exports and the tool will parse them automatically. You can upload both, just one, or skip this for now and add them later from inside the project.
+            </div>
+            <div className="upload-pair" style={{marginBottom:20}}>
+              <UploadZone title="Custom JS extractor" hint="Export → Custom JavaScript tab" onFile={handleCjs} done={!!cjsRows}/>
+              <UploadZone title="Internal All tab" hint="Bulk Export → All Internal Pages" onFile={handleInt} done={!!intRows}/>
+            </div>
+            {(cjsRows||intRows)&&(
+              <div style={{background:'var(--green-dim)',border:'1px solid rgba(62,199,128,0.2)',borderRadius:'var(--r)',padding:'9px 13px',fontSize:12,color:'var(--green-dark)',marginBottom:16}}>
+                {[cjsRows&&`Custom JS: ${cjsRows.length} rows`,intRows&&`Internal All: ${intRows.length} rows`].filter(Boolean).join(' · ')} ready to import
+              </div>
+            )}
+            <div className="f-row">
+              <button className="btn-text" onClick={()=>setStep(1)}>← Back</button>
+              <div className="f-row-right">
+                <button className="btn btn-ghost" onClick={finish}>Skip for now</button>
+                <button className="btn btn-green" onClick={finish} disabled={!cjsRows&&!intRows}>
+                  {cjsRows||intRows?'Create project':'Create project'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── URL detail panel ── */
+function UrlPanel({u,apiKey,onClose,onUpdate}) {
+  const [q,setQ]=useState(u.seedQuery||'');
+  const [busy,setBusy]=useState(false);
+  const [tab,setTab]=useState('fanout');
+  const [res,setRes]=useState(u.fanout||null);
+  const s=u.sf_json||{};
+
+  const run=async()=>{
+    if(!apiKey||!q.trim())return;
+    setBusy(true);
+    try{
+      const raw=await gemini(apiKey,fanoutPrompt(u,q));
+      let p=null;try{p=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(m)p=JSON.parse(m[0]);}
+      if(p){setRes(p);onUpdate({...u,seedQuery:q,fanout:p});}
+    }catch(e){console.error(e);}
+    setBusy(false);
+  };
+
+  const sc=n=>n>=70?'var(--green-dark)':n>=40?'var(--warning)':'var(--danger)';
+  const ib=i=>({informational:'b-t',comparative:'b-p',transactional:'b-g',procedural:'b-s',navigational:'b-x'}[i]||'b-x');
+
+  return (
+    <div className="panel">
+      <button className="p-x" onClick={onClose}>✕ Close</button>
+      <div style={{paddingRight:60}}>
+        <div className="mono muted mb-8" style={{textTransform:'uppercase',letterSpacing:'1px'}}>{u.page_type}</div>
+        <div style={{fontSize:15,fontWeight:700,letterSpacing:'-0.3px',marginBottom:4,lineHeight:1.35}}>{s.titleTag||s.h1||u.url}</div>
+        <div className="mono muted mb-20" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.url}</div>
+      </div>
+
+      <div style={{display:'flex',gap:8,marginBottom:14}}>
+        <input className="fi" style={{flex:1}} placeholder="What would someone search to find this page?" value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>e.key==='Enter'&&run()}/>
+        <button className="btn btn-green" onClick={run} disabled={busy||!apiKey||!q.trim()}>
+          {busy?<><div className="spin"/>Running</>:'Run fan-out'}
+        </button>
+      </div>
+
+      {!apiKey&&<div className="warn">Add your Gemini API key in the toolbar to run analysis.</div>}
+
+      {res?(
+        <>
+          <div className="stats" style={{marginBottom:12}}>
+            <div className="stat"><div className="stat-lbl">Coverage score</div><div className="stat-n" style={{color:sc(res.overall_score)}}>{res.overall_score}</div></div>
+            <div className="stat"><div className="stat-lbl">Sub-queries</div><div className="stat-n">{res.sub_queries?.length||0}</div></div>
+            <div className="stat"><div className="stat-lbl">Gaps found</div><div className="stat-n" style={{color:(res.gaps?.length||0)>3?'var(--danger)':'var(--warning)'}}>{res.gaps?.length||0}</div></div>
+          </div>
+          {res.summary&&<div style={{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--r)',padding:'10px 13px',fontSize:13,color:'var(--text2)',marginBottom:14,lineHeight:1.65,fontWeight:300}}>{res.summary}</div>}
+          <div className="tabs">
+            {[['fanout','Fan-out map'],['gaps',`Gaps (${res.gaps?.length||0})`],['recs','Recommendations']].map(([k,l])=>(
+              <div key={k} className={`tab${tab===k?' on':''}`} onClick={()=>setTab(k)}>{l}</div>
+            ))}
+          </div>
+          {tab==='fanout'&&(res.sub_queries||[]).map((sq,i)=>(
+            <div key={i} className="sq">
+              <span className={`badge ${ib(sq.intent)}`} style={{marginTop:2,flexShrink:0}}>{sq.intent?.slice(0,4)}</span>
+              <div style={{flex:1}}><div className="sq-q">{sq.query}</div>{sq.reason&&<div className="sq-r">{sq.reason}</div>}</div>
+              <div style={{flexShrink:0,textAlign:'right'}}>
+                <div style={{fontFamily:'var(--mono)',fontSize:11,color:sc(sq.coverage_score),marginBottom:3}}>{sq.coverage_score}%</div>
+                <div style={{width:50,height:3,background:'var(--sand)',borderRadius:2,overflow:'hidden'}}><div style={{width:`${sq.coverage_score}%`,height:'100%',background:sc(sq.coverage_score),borderRadius:2}}/></div>
+              </div>
+            </div>
+          ))}
+          {tab==='gaps'&&<>{(res.gaps||[]).map((g,i)=><div key={i} className="gap">{g}</div>)}{!res.gaps?.length&&<div className="muted" style={{fontSize:13,padding:'8px 0'}}>No gaps identified — good coverage.</div>}</>}
+          {tab==='recs'&&(res.recommendations||[]).map((r,i)=><div key={i} className="rec"><div className="rec-n">{String(i+1).padStart(2,'0')}</div><div className="rec-t">{r}</div></div>)}
+        </>
+      ):(
+        <div style={{padding:'20px 0'}}>
+          <div style={{fontSize:24,marginBottom:10,color:'var(--border2)',textAlign:'center'}}>◎</div>
+          <div style={{fontSize:13,color:'var(--text3)',fontWeight:300,textAlign:'center',marginBottom:20}}>Enter the seed query — the phrase someone would type to find this page — and run the fan-out.</div>
+          {s.titleTag&&(
+            <>
+              <div className="sec-h">What we know about this page</div>
+              {[['Title',s.titleTag],['H1',s.h1],['Meta',s.metaDescription],['Type',u.page_type]].filter(([,v])=>v).map(([k,v])=>(
+                <div key={k} style={{display:'flex',gap:12,marginBottom:7}}>
+                  <div className="mono muted" style={{width:42,flexShrink:0,paddingTop:1,textTransform:'uppercase',letterSpacing:'1px'}}>{k}</div>
+                  <div style={{fontSize:13,color:'var(--text2)',fontWeight:300}}>{v}</div>
+                </div>
+              ))}
+              {(s.headings||[]).length>0&&(
+                <>
+                  <div className="sec-h" style={{marginTop:16}}>Headings</div>
+                  {s.headings.slice(0,8).map((h,i)=>(
+                    <div key={i} style={{display:'flex',gap:8,marginBottom:5,alignItems:'flex-start'}}>
+                      <span className="mono muted">{h.level}</span>
+                      <span style={{fontSize:13,color:'var(--text2)',fontWeight:300}}>{h.heading}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Project view ── */
+function ProjectView({project,apiKey,onUpdate,notify,onUploadMore}) {
+  const [selected,setSelected]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [pct,setPct]=useState(0);
+
+  const upd=u=>{const urls=project.urls.map(x=>x.url===u.url?u:x);onUpdate({...project,urls});if(selected?.url===u.url)setSelected(u);};
+
+  const runAll=async()=>{
+    const pending=project.urls.filter(u=>!u.fanout&&u.seedQuery);
+    if(!pending.length){notify('No URLs with seed queries ready to run','info');return;}
+    setBusy(true);
+    const all=[...project.urls];
+    for(let i=0;i<pending.length;i++){
+      const u=pending[i];
+      try{const raw=await gemini(apiKey,fanoutPrompt(u,u.seedQuery));let p=null;try{p=JSON.parse(raw);}catch{const m=raw.match(/\{[\s\S]*\}/);if(m)p=JSON.parse(m[0]);}if(p){const idx=all.findIndex(x=>x.url===u.url);if(idx>=0)all[idx]={...all[idx],fanout:p};}}catch(e){console.error(e);}
+      setPct(Math.round(((i+1)/pending.length)*100));
+    }
+    onUpdate({...project,urls:all});setBusy(false);setPct(0);
+    notify(`Fan-out complete for ${pending.length} pages`,'success');
+  };
+
+  const scored=project.urls?.filter(u=>u.fanout).length||0;
+  const avg=scored?Math.round(project.urls.filter(u=>u.fanout).reduce((s,u)=>s+(u.fanout?.overall_score||0),0)/scored):null;
+  const ready=project.urls?.filter(u=>!u.fanout&&u.seedQuery).length||0;
+  const sc=n=>n>=70?'var(--green-dark)':n>=40?'var(--warning)':'var(--danger)';
+
+  return (
+    <div style={{height:'100%',display:'flex',flexDirection:'column'}}>
+      <div className="topbar">
+        <div><div className="tb-title">{project.name}</div>{project.domain&&<div className="tb-sub">{project.domain}</div>}</div>
+        <div className="tb-right">
+          {busy&&<div style={{display:'flex',alignItems:'center',gap:7,fontSize:12,color:'var(--text3)'}}><div className="spin"/>{pct}%</div>}
+          {scored>0&&<button className="btn btn-ghost btn-sm" onClick={()=>{onUpdate({...project,urls:project.urls.map(u=>{const{fanout,...r}=u;return r;})});notify('Results cleared','info');}}>Clear results</button>}
+          <button className="btn btn-ghost btn-sm" onClick={onUploadMore}>Add data</button>
+          {ready>0&&<button className="btn btn-green btn-sm" onClick={runAll} disabled={busy||!apiKey}>Run all ({ready})</button>}
+        </div>
+      </div>
+
+      <div className="content">
+        {project.urls?.length>0?(
+          <>
+            <div className="stats">
+              <div className="stat"><div className="stat-lbl">Total pages</div><div className="stat-n">{project.urls.length}</div></div>
+              <div className="stat"><div className="stat-lbl">Analysed</div><div className={`stat-n${scored===project.urls.length?' g':''}`}>{scored}</div></div>
+              <div className="stat"><div className="stat-lbl">Avg coverage</div><div className="stat-n" style={{color:avg?sc(avg):'var(--text3)'}}>{avg??'—'}</div></div>
+            </div>
+            <div className="tbl-shell">
+              <table>
+                <thead><tr><th>Page</th><th>Type</th><th>Seed query</th><th>Coverage</th><th>Status</th><th></th></tr></thead>
+                <tbody>
+                  {project.urls.map((u,i)=>(
+                    <tr key={i}>
+                      <td className="td-url" title={u.url}>{u.url.replace(/^https?:\/\//,'')}</td>
+                      <td><span className="badge b-x">{u.page_type||'—'}</span></td>
+                      <td><input className="fi" style={{padding:'4px 8px',fontSize:11,minWidth:176}} placeholder="What would someone search to find this?" value={u.seedQuery||''} onChange={e=>upd({...u,seedQuery:e.target.value})}/></td>
+                      <td>{u.fanout?(<div className="score"><div className="s-track"><div className="s-fill" style={{width:`${u.fanout.overall_score}%`,background:sc(u.fanout.overall_score)}}/></div><span className="s-lbl">{u.fanout.overall_score}</span></div>):<span className="mono muted">—</span>}</td>
+                      <td>{u.fanout?<span className="badge b-g">Done</span>:u.seedQuery?<span className="badge b-a">Ready</span>:<span className="badge b-x">Needs query</span>}</td>
+                      <td><button className="btn btn-ghost btn-sm" onClick={()=>setSelected(u)}>{u.fanout?'View results':'Analyse'}</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ):(
+          <div style={{paddingTop:40,textAlign:'center'}}>
+            <div style={{fontSize:13,color:'var(--text3)',fontWeight:300,marginBottom:16}}>This project doesn't have any pages yet.</div>
+            <button className="btn btn-primary" onClick={onUploadMore}>Add Screaming Frog exports</button>
+          </div>
+        )}
+      </div>
+
+      {selected&&<UrlPanel u={selected} apiKey={apiKey} onClose={()=>setSelected(null)} onUpdate={upd}/>}
+    </div>
+  );
+}
+
+/* ── Add data modal (for existing projects) ── */
+function AddData({project,onClose,onSave,notify}) {
+  const [cjsRows,setCjsRows]=useState(null);
+  const [intRows,setIntRows]=useState(null);
+
+  const save=()=>{
+    let urls=[...project.urls];
+    const byUrl=Object.fromEntries(urls.map(u=>[u.url,u]));
+    if(cjsRows){parseCustomJs(cjsRows).forEach(x=>{if(!byUrl[x.url])byUrl[x.url]=x;});}
+    if(intRows){parseInternal(intRows).forEach(x=>{if(byUrl[x.url]){byUrl[x.url]={...byUrl[x.url],sf_json:{...x.sf_json,...byUrl[x.url].sf_json}};}else{byUrl[x.url]=x;}});}
+    const next=Object.values(byUrl);
+    onSave({...project,urls:next});
+    notify(`Data updated — ${next.length} pages total`,'success');
+    onClose();
+  };
+
+  return (
+    <div className="overlay" onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div className="modal">
+        <div className="m-title">Add data to {project.name}</div>
+        <div className="m-sub">Upload new CSV exports. Existing pages won't be overwritten — new ones will be added and any missing metadata merged in.</div>
+        <div className="upload-pair" style={{marginBottom:20}}>
+          <UploadZone title="Custom JS extractor" hint="Export → Custom JavaScript tab" onFile={(r,n)=>setCjsRows(r)} done={!!cjsRows}/>
+          <UploadZone title="Internal All tab" hint="Bulk Export → All Internal Pages" onFile={(r,n)=>setIntRows(r)} done={!!intRows}/>
+        </div>
+        <div className="f-row">
+          <button className="btn-text" onClick={onClose}>Cancel</button>
+          <button className="btn btn-green" onClick={save} disabled={!cjsRows&&!intRows}>Import data</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Readme landing ── */
+function Readme({onNew}) {
+  return (
+    <div className="content">
+      <div className="readme">
+        <div className="readme-eyebrow">iProspect — Fan-Out Intelligence</div>
+        <div className="readme-hero">Your content ranked.<br/><span>Will AI cite it?</span></div>
+        <div className="readme-lead">
+          Traditional search ranks pages. AI search synthesises answers — pulling from multiple sources, decomposing queries into sub-questions, and citing only the pages that cover each one well. This tool simulates that process so you can see exactly where your content stands.
+        </div>
+
+        <div className="readme-divider"/>
+
+        <div className="readme-section-title">What is query fan-out?</div>
+        <div className="readme-body">
+          When someone asks an AI search engine a question, it doesn't just look for pages that match the query. It breaks the question apart — into a set of smaller, more specific sub-queries — and retrieves the best answer for each one. The final response is assembled from multiple sources, each cited for a different part of the answer.
+        </div>
+        <div className="readme-body">
+          That means your page might rank well for the main keyword but still be invisible in AI-generated answers, because it only covers one dimension of what the AI is actually looking for.
+        </div>
+
+        <div className="readme-divider"/>
+
+        <div className="readme-section-title">What this tool does</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
+          {[
+            ['Simulates fan-out','For any page and seed query, we generate the sub-queries an AI would fan out to — based on real intent decomposition patterns.'],
+            ['Scores your coverage','Each sub-query is scored against your actual page content from the Screaming Frog extract. You see exactly where the gaps are.'],
+            ['Surfaces what to fix','The tool tells you which subtopics are missing, partially covered, or strong — so you know what to write, expand, or restructure.'],
+            ['Works per project','Every client or campaign lives in its own workspace. Data stays local, in your browser. Nothing is sent anywhere except your Gemini API calls.'],
+          ].map(([t,b])=>(
+            <div key={t} className="readme-concept">
+              <div className="readme-concept-title">{t}</div>
+              <div className="readme-concept-body">{b}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="readme-divider"/>
+
+        <div className="readme-section-title">How to get started</div>
+        <div className="readme-steps">
+          {[
+            ['01','Set up a project','Click "New project" in the sidebar. Give it a name, the client domain, and a note on tone. Takes 30 seconds.'],
+            ['02','Add your Screaming Frog exports','Upload the Custom JavaScript extractor CSV and/or the Internal All tab CSV. The tool parses them automatically and builds your page list.'],
+            ['03','Add a seed query per page','For each page you want to analyse, enter the main search query it's targeting. This is the starting point for the fan-out simulation.'],
+            ['04','Run the fan-out','Hit "Run all" to process every page at once, or open a page individually to go deeper. You'll need a Gemini API key — paste it in the toolbar.'],
+            ['05','Review and act','Each page shows a coverage score, a map of all sub-queries, the gaps, and concrete recommendations. Use these to brief your content team.'],
+          ].map(([n,t,b])=>(
+            <div key={n} className="readme-step">
+              <div className="step-num">{n}</div>
+              <div><div className="step-title">{t}</div><div className="step-body">{b}</div></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="readme-divider"/>
+
+        <div className="readme-section-title">Before you start</div>
+        <div className="readme-body">
+          You'll need a Gemini API key from Google AI Studio — it's free to get started. Paste it into the field in the top-right corner. It's stored only in your browser session and never sent anywhere other than Google's API.
+        </div>
+        <div className="readme-body">
+          For the Screaming Frog exports: run a crawl with JavaScript rendering enabled, apply the custom extractor script from the Crawl tab, then export the Custom JavaScript column and the Internal All tab as separate CSVs.
+        </div>
+
+        <div className="readme-cta">
+          <button className="btn btn-primary" onClick={onNew}>Create your first project</button>
+          <div className="readme-cta-note">Your data stays in your browser. No account needed.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── App ── */
+function App() {
+  const [projects,setProjects]=useState(()=>ls.get('ip_fo_p',[]));
+  const [activeId,setActiveId]=useState(()=>ls.get('ip_fo_a',null));
+  const [apiKey,setApiKey]=useState(()=>sessionStorage.getItem('ip_g')||'');
+  const [showNew,setShowNew]=useState(false);
+  const [showAdd,setShowAdd]=useState(false);
+  const [toast,setToast]=useState(null);
+
+  useEffect(()=>ls.set('ip_fo_p',projects),[projects]);
+  useEffect(()=>ls.set('ip_fo_a',activeId),[activeId]);
+  useEffect(()=>{apiKey?sessionStorage.setItem('ip_g',apiKey):sessionStorage.removeItem('ip_g');},[apiKey]);
+
+  const active=projects.find(p=>p.id===activeId);
+  const notify=(msg,type='info')=>setToast({msg,type,id:Date.now()});
+  const create=p=>{setProjects(ps=>[...ps,p]);setActiveId(p.id);};
+  const update=p=>setProjects(ps=>ps.map(x=>x.id===p.id?p:x));
+
+  return (
+    <div className="app">
+      <div className="sidebar">
+        <div className="s-logo">
+          <div className="s-brand">iProspect</div>
+          <div className="s-product">Fan-Out Intelligence</div>
+        </div>
+        <div className="s-sec">Projects</div>
+        <div className="s-nav">
+          {projects.map(p=>(
+            <div key={p.id} className={`s-item${p.id===activeId?' on':''}`} onClick={()=>setActiveId(p.id)}>
+              <div className="s-pip"/><div className="s-name">{p.name}</div><div className="s-count">{p.urls?.length||0}</div>
+            </div>
+          ))}
+          {!projects.length&&<div className="s-empty">No projects yet.<br/>Create one to get going.</div>}
+        </div>
+        <div className="s-foot">
+          <button className="btn btn-dark btn-sm btn-full" onClick={()=>setShowNew(true)}>+ New project</button>
+        </div>
+      </div>
+
+      <div className="main">
+        <div className="topbar">
+          <div>
+            <div className="tb-title">{active?active.name:'Fan-Out Intelligence'}</div>
+            <div className="tb-sub">{active?(active.domain||'No domain set'):'Query fan-out simulation & AI visibility'}</div>
+          </div>
+          <div className="tb-right">
+            <div className="api-field">
+              <div className="api-lbl">Gemini key</div>
+              <input className="api-inp" type="password" placeholder="Paste your API key…" value={apiKey} onChange={e=>setApiKey(e.target.value)}/>
+              <div className={`api-dot${apiKey?' on':' off'}`}/>
+            </div>
+          </div>
+        </div>
+
+        {active
+          ? <ProjectView key={active.id} project={active} apiKey={apiKey} onUpdate={update} notify={notify} onUploadMore={()=>setShowAdd(true)}/>
+          : <Readme onNew={()=>setShowNew(true)}/>
+        }
+      </div>
+
+      {showNew&&<NewProject onClose={()=>setShowNew(false)} onSave={create} notify={notify}/>}
+      {showAdd&&active&&<AddData project={active} onClose={()=>setShowAdd(false)} onSave={update} notify={notify}/>}
+      {toast&&<Toast key={toast.id} msg={toast.msg} type={toast.type} onDone={()=>setToast(null)}/>}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
